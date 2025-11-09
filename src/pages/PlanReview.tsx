@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Clock, Coffee, MapPin } from "lucide-react";
+import { MapView } from "@/components/MapView";
 
 const PlanReview = () => {
   return (
@@ -22,6 +23,19 @@ const PlanReview = () => {
         <div className="flex justify-between items-center">
           <span className="font-bold">End Time:</span>
           <span>6:00 PM</span>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <h2 className="text-xl font-bold mb-3">Route Map</h2>
+        <div className="h-[300px]">
+          <MapView
+            markers={[
+              { id: "1", position: { lat: 47.7950, lng: 13.0470 }, title: "Hohensalzburg Fortress" },
+              { id: "2", position: { lat: 47.8080, lng: 13.0440 }, title: "Mozart's Birthplace" },
+              { id: "3", position: { lat: 47.8095, lng: 13.0550 }, title: "Your Location" },
+            ]}
+          />
         </div>
       </div>
 

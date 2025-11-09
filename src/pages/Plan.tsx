@@ -7,10 +7,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { places } from "@/data/places";
 import { MessageSquare } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MapView } from "@/components/MapView";
 
 const Plan = () => {
   const [selectedPlaces, setSelectedPlaces] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
 
   const filteredPlaces = places.filter((place) =>
     place.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -105,37 +108,78 @@ const Plan = () => {
           />
         </div>
 
-        <div className="space-y-2">
-          {filteredPlaces.map((place) => (
-            <div
-              key={place.id}
-              className="flex items-start space-x-3 p-3 border rounded-xl"
-            >
-              <Checkbox
-                id={place.id}
-                checked={selectedPlaces.includes(place.id)}
-                onCheckedChange={() => togglePlace(place.id)}
-              />
-              <div className="flex-1">
-                <label htmlFor={place.id} className="font-medium">
-                  {place.name}
-                </label>
-                <p className="text-sm text-muted-foreground">
-                  {place.shortDescription}
-                </p>
-                <div className="flex gap-4 mt-1 text-xs">
-                  <span className="line-through text-muted-foreground">
-                    €{place.adultPrice} adult
-                  </span>
-                  <span className="line-through text-muted-foreground">
-                    €{place.childPrice} child
-                  </span>
-                  <span className="text-primary font-medium">FREE with Card</span>
+        <Tabs defaultValue="list" className="w-full" onValueChange={(v) => setViewMode(v as "list" | "map")}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="list">List View</TabsTrigger>
+            <TabsTrigger value="map">Map View</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="list" className="space-y-2 mt-4">
+            {filteredPlaces.map((place) => (
+              <div
+                key={place.id}
+                className="flex items-start space-x-3 p-3 border rounded-xl"
+              >
+                <Checkbox
+                  id={place.id}
+                  checked={selectedPlaces.includes(place.id)}
+                  onCheckedChange={() => togglePlace(place.id)}
+                />
+                <div className="flex-1">
+                  <label htmlFor={place.id} className="font-medium">
+                    {place.name}
+                  </label>
+                  <p className="text-sm text-muted-foreground">
+                    {place.shortDescription}
+                  </p>
+                  <div className="flex gap-4 mt-1 text-xs">
+                    <span className="line-through text-muted-foreground">
+                      €{place.adultPrice} adult
+                    </span>
+                    <span className="line-through text-muted-foreground">
+                      €{place.childPrice} child
+                    </span>
+                    <span className="text-primary font-medium">FREE with Card</span>
+                  </div>
                 </div>
               </div>
+            ))}
+          </TabsContent>
+          
+          <TabsContent value="map" className="mt-4">
+            <div className="h-[400px] mb-4">
+              <MapView
+                markers={places.map(place => ({
+                  id: place.id,
+                  position: { lat: 47.8095 + Math.random() * 0.02, lng: 13.0550 + Math.random() * 0.02 },
+                  title: place.name
+                }))}
+                interactive={true}
+              />
             </div>
-          ))}
-        </div>
+            <p className="text-sm text-muted-foreground mb-3">
+              Selected: {selectedPlaces.length} place{selectedPlaces.length !== 1 ? 's' : ''}
+            </p>
+            {selectedPlaces.length > 0 && (
+              <div className="space-y-2">
+                {places
+                  .filter(place => selectedPlaces.includes(place.id))
+                  .map(place => (
+                    <div key={place.id} className="flex items-center justify-between p-3 border rounded-xl">
+                      <span className="font-medium">{place.name}</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => togglePlace(place.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
 
         <Button className="w-full" size="lg" asChild>
           <Link to="/plan/list">
