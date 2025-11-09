@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Plus, Minus } from "lucide-react";
+import { ArrowLeft, Plus, Minus, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface CardOption {
@@ -12,6 +12,7 @@ interface CardOption {
   price: number;
   duration: string;
   ageGroup: string;
+  recommended?: boolean;
 }
 
 const cardOptions: CardOption[] = [
@@ -20,7 +21,7 @@ const cardOptions: CardOption[] = [
   { id: "48h-child", name: "48 Hour Card", price: 25, duration: "48h", ageGroup: "Child (6-15)" },
   { id: "48h-adult", name: "48 Hour Card", price: 49, duration: "48h", ageGroup: "Adult" },
   { id: "72h-child", name: "72 Hour Card", price: 29, duration: "72h", ageGroup: "Child (6-15)" },
-  { id: "72h-adult", name: "72 Hour Card", price: 59, duration: "72h", ageGroup: "Adult" },
+  { id: "72h-adult", name: "72 Hour Card", price: 59, duration: "72h", ageGroup: "Adult", recommended: true },
 ];
 
 const SalzburgCardBuy = () => {
@@ -56,10 +57,18 @@ const SalzburgCardBuy = () => {
 
       <div className="space-y-3 mb-6">
         {cardOptions.map((card) => (
-          <Card key={card.id} className="p-4">
+          <Card key={card.id} className={`p-4 ${card.recommended ? 'border-2 border-primary' : ''}`}>
             <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-bold text-lg">{card.name}</h3>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-lg">{card.name}</h3>
+                  {card.recommended && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-bold rounded-full">
+                      <Star className="h-3 w-3 fill-current" />
+                      RECOMMENDED
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground">{card.ageGroup}</p>
                 <p className="font-bold text-primary mt-1">€{card.price}</p>
               </div>

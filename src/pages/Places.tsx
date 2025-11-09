@@ -1,17 +1,43 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { places } from "@/data/places";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Check, Heart } from "lucide-react";
 
 const Places = () => {
+  const [visitedPlaces, setVisitedPlaces] = useState<string[]>([]);
+  const [favoritePlaces, setFavoritePlaces] = useState<string[]>([]);
+
+  const toggleVisited = (placeId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setVisitedPlaces((prev) =>
+      prev.includes(placeId)
+        ? prev.filter((id) => id !== placeId)
+        : [...prev, placeId]
+    );
+  };
+
+  const toggleFavorite = (placeId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFavoritePlaces((prev) =>
+      prev.includes(placeId)
+        ? prev.filter((id) => id !== placeId)
+        : [...prev, placeId]
+    );
+  };
+
   return (
     <div className="pb-20 pt-6 px-4">
       <h1 className="text-3xl font-bold mb-6">All Places</h1>
-      
-      <div className="space-y-4">
+
+      <div className="space-y-6">
         {places.map((place) => (
-          <Link key={place.id} to={`/place/${place.slug}`}>
-            <Card className="overflow-hidden transition-transform duration-200 active:scale-98">
-              <div className="flex gap-4">
+          <Card key={place.id} className="overflow-hidden">
+            <Link to={`/place/${place.slug}`}>
+              <div className="flex gap-4 transition-opacity duration-200 active:opacity-70">
                 <img
                   src={place.image}
                   alt={place.name}
@@ -31,8 +57,29 @@ const Places = () => {
                   </div>
                 </div>
               </div>
-            </Card>
-          </Link>
+            </Link>
+
+            <div className="flex gap-2 px-4 pb-4 pt-3 border-t mt-4">
+              <Button
+                variant={visitedPlaces.includes(place.id) ? "default" : "outline"}
+                size="sm"
+                className="flex-1"
+                onClick={(e) => toggleVisited(place.id, e)}
+              >
+                <Check className="h-4 w-4 mr-2" />
+                {visitedPlaces.includes(place.id) ? "Visited" : "Mark Visited"}
+              </Button>
+              <Button
+                variant={favoritePlaces.includes(place.id) ? "default" : "outline"}
+                size="sm"
+                className="flex-1"
+                onClick={(e) => toggleFavorite(place.id, e)}
+              >
+                <Heart className={`h-4 w-4 mr-2 ${favoritePlaces.includes(place.id) ? 'fill-current' : ''}`} />
+                {favoritePlaces.includes(place.id) ? "Favorited" : "Favorite"}
+              </Button>
+            </div>
+          </Card>
         ))}
       </div>
     </div>

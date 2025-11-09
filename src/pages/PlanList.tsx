@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const PlanList = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
+
+  const selectedPlaces = location.state?.selectedPlaces || [];
+  const selectedPlaceNames = location.state?.selectedPlaceNames || [];
 
   const handlePlanTrip = async () => {
     setIsLoading(true);
@@ -43,11 +47,27 @@ const PlanList = () => {
 
       <div className="space-y-4 mb-6">
         <p className="text-muted-foreground">
-          You have selected 3 places to visit. Review your selections and click "Plan My Trip" to generate your personalized itinerary.
+          You have selected {selectedPlaces.length} place{selectedPlaces.length !== 1 ? 's' : ''} to visit. Review your selections and click "Plan My Trip" to generate your personalized itinerary.
         </p>
+
+        {selectedPlaceNames.length > 0 && (
+          <div className="space-y-2">
+            {selectedPlaceNames.map((name, index) => (
+              <div key={index} className="flex items-center gap-3 p-3 bg-card border rounded-xl">
+                <MapPin className="h-5 w-5 text-primary flex-shrink-0" />
+                <span className="font-medium">{name}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <Button className="w-full" size="lg" onClick={handlePlanTrip}>
+      <Button
+        className="w-full"
+        size="lg"
+        onClick={handlePlanTrip}
+        disabled={selectedPlaces.length === 0}
+      >
         Plan My Trip
       </Button>
     </div>

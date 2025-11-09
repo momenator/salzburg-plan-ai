@@ -1,0 +1,568 @@
+{
+  "name": "AI Travel Planner – Salzburg (end-to-end)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "ai-travel/salzburg",
+        "options": {
+          "responseData": "allEntries"
+        }
+      },
+      "id": "WebhookEntry",
+      "name": "Webhook (entry)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 3,
+      "position": [
+        -1200,
+        0
+      ],
+      "webhookId": "ai-travel-salzburg",
+      "notesInFlow": true,
+      "notes": "POST your payload here. Response is controlled by the final “Respond to Webhook” node."
+    },
+    {
+      "parameters": {
+        "functionCode": "const tz = 'Europe/Vienna';\nconst body = items[0].json || {};\nconst today = new Date().toISOString().slice(0,10);\n\nconst out = {\n  date: body.date || today,\n  people: Number.isInteger(body.people) ? body.people : 2,\n  transport: (body.transport || 'public'),\n  wheelchair: !!body.wheelchair,\n  lift: !!body.lift,\n  preferences: Array.isArray(body.preferences) ? body.preferences.map(p => String(p).toLowerCase().trim()) : [],\n  places: Array.isArray(body.places) ? body.places : [],\n  tz,\n  city: 'Salzburg, AT',\n  dates: [0,1,2].map(d => {\n    const dt = new Date(body.date || today);\n    dt.setDate(dt.getDate() + d);\n    return dt.toISOString().slice(0,10);\n  })\n};\n\nif (!out.places.length) {\n  // soft-warn but proceed (you can switch to throw Error to make it strict)\n  // throw new Error('No seed attractions provided in payload.');\n}\n\nreturn [{json: out}];"
+      },
+      "id": "ValidateNormalize",
+      "name": "Function: Validate & Normalize",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        -980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://places.googleapis.com/v1/places:searchText",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "X-Goog-Api-Key": "YOUR_GOOGLE_API_KEY",
+            "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.primaryType,places.currentOpeningHours,places.accessibilityOptions,places.editorialSummary"
+          }
+        },
+        "sendBody": true,
+        "bodyParametersJson": "={{ {\n  textQuery: (($json.preferences && $json.preferences.length) ? ($json.preferences.join(' OR ') + ' near Salzburg') : 'coffee OR restaurant OR shopping near Salzburg'),\n  openNow: false,\n  maxResultCount: 20,\n  regionCode: 'AT',\n  locationBias: { circle: { center: { latitude: 47.8095, longitude: 13.0550 }, radius: 10000 } }\n} }}"
+      },
+      "id": "PlacesExpand",
+      "name": "HTTP: Google Places (expand by prefs)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -760,
+        -160
+      ],
+      "notesInFlow": true,
+      "notes": "Expands with cafés/restaurants/shopping using preferences. Add your Google API key to headers."
+    },
+    {
+      "parameters": {
+        "functionCode": "function key(p) {\n  const id = p.place_id || p.id || (p.name + ':' + ((p.location?.latitude??'')+','+(p.location?.longitude??'')));\n  return String(id).toLowerCase();\n}\n\nconst seed = $node[\"Function: Validate & Normalize\"].json.places || [];\n\n// Normalize seed a bit\nconst seedNorm = seed.map(p => ({\n  name: p.name,\n  place_id: p.place_id || p.id,\n  location: p.location,\n  primaryType: p.primaryType,\n  opening: p.opening,\n  access: p.access,\n  indoor: p.indoor,\n  outdoor: p.outdoor\n}));\n\n// Google Places results\nconst gpRaw = items[0].json || {};\nconst gpList = Array.isArray(gpRaw.places) ? gpRaw.places : [];\nconst expanded = gpList.map(p => ({\n  name: p.displayName?.text || p.name,\n  place_id: p.id || p.place_id,\n  location: p.location,\n  primaryType: p.primaryType,\n  opening: p.currentOpeningHours || p.opening,\n  access: p.accessibilityOptions || p.access,\n  indoor: (p.primaryType||'').toLowerCase().includes('museum') ? true : undefined,\n  outdoor: (p.primaryType||'').toLowerCase().includes('park') ? true : undefined\n}));\n\n// Deduplicate\nconst map = new Map();\nfor (const p of [...seedNorm, ...expanded]) {\n  const k = key(p);\n  map.set(k, {...(map.get(k)||{}), ...p});\n}\nconst places = Array.from(map.values());\n\nreturn [{ json: { places } }];"
+      },
+      "id": "AggregateDedup",
+      "name": "Function: Aggregate & Deduplicate Places",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        -540,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://your-internal-api/occupancy/batch",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "Authorization": "Bearer YOUR_INTERNAL_API_TOKEN"
+          }
+        },
+        "sendBody": true,
+        "bodyParametersJson": "={{ {\n  dateList: $node[\"Function: Validate & Normalize\"].json.dates,\n  placeIds: ($node[\"Function: Aggregate & Deduplicate Places\"].json.places || []).map(p => p.place_id).filter(Boolean)\n} }}"
+      },
+      "id": "OccInternal",
+      "name": "HTTP: Occupancy (internal attractions)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -300,
+        -300
+      ],
+      "notesInFlow": true,
+      "notes": "Replace URL/token with your Salzburg internal occupancy API."
+    },
+    {
+      "parameters": {
+        "functionCode": "const res = items[0].json || {};\nres.source = 'internal';\nreturn [{ json: res }];"
+      },
+      "id": "TagInternalOcc",
+      "name": "Function: Tag internal occ",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://api.open-meteo.com/v1/forecast",
+        "jsonParameters": true,
+        "sendQuery": true,
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "latitude",
+              "value": "47.8095"
+            },
+            {
+              "name": "longitude",
+              "value": "13.0550"
+            },
+            {
+              "name": "hourly",
+              "value": "precipitation,precipitation_probability,temperature_2m,weathercode"
+            },
+            {
+              "name": "daily",
+              "value": "precipitation_sum,precipitation_probability_max,weathercode"
+            },
+            {
+              "name": "timezone",
+              "value": "Europe/Vienna"
+            }
+          ]
+        }
+      },
+      "id": "Weather",
+      "name": "HTTP: Weather (Open-Meteo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -760,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const places = $node[\"Function: Aggregate & Deduplicate Places\"].json.places || [];\nconst picks = places.slice(0, 6);\nconst pairs = [];\nfor (let i=0;i<picks.length;i++) {\n  for (let j=i+1;j<picks.length;j++) {\n    pairs.push({origin: picks[i], destination: picks[j]});\n  }\n}\nreturn pairs.map(p => ({json: p}));"
+      },
+      "id": "TrafficSeeds",
+      "name": "Function: Traffic Seeds",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        -540,
+        20
+      ],
+      "notesInFlow": true,
+      "notes": "Picks ~6 places and creates pairwise origin/destination items."
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://maps.googleapis.com/maps/api/distancematrix/json",
+        "jsonParameters": true,
+        "sendQuery": true,
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "origins",
+              "value": "={{ ($json.origin.location?.latitude && $json.origin.location?.longitude) ? ($json.origin.location.latitude + \",\" + $json.origin.location.longitude) : encodeURIComponent($json.origin.name) }}"
+            },
+            {
+              "name": "destinations",
+              "value": "={{ ($json.destination.location?.latitude && $json.destination.location?.longitude) ? ($json.destination.location.latitude + \",\" + $json.destination.location.longitude) : encodeURIComponent($json.destination.name) }}"
+            },
+            {
+              "name": "mode",
+              "value": "={{ $node[\"Function: Validate & Normalize\"].json.transport === 'public' ? 'transit' : 'driving' }}"
+            },
+            {
+              "name": "departure_time",
+              "value": "={{ Math.floor(new Date($node[\"Function: Validate & Normalize\"].json.date + 'T09:00:00').getTime()/1000) }}"
+            },
+            {
+              "name": "traffic_model",
+              "value": "best_guess"
+            },
+            {
+              "name": "language",
+              "value": "de"
+            },
+            {
+              "name": "key",
+              "value": "YOUR_GOOGLE_API_KEY"
+            }
+          ]
+        }
+      },
+      "id": "DistanceMatrix",
+      "name": "HTTP: Google Distance Matrix",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -300,
+        20
+      ],
+      "notesInFlow": true,
+      "notes": "Add your Google Maps API key. This node iterates over seed pairs created upstream."
+    },
+    {
+      "parameters": {
+        "functionCode": "const edges = [];\nfor (const i of items) {\n  const row = i.json || {};\n  const api = row.rows?.[0]?.elements?.[0];\n  const duration = api?.duration_in_traffic?.value || api?.duration?.value || null;\n  edges.push({\n    origin: row.origin?.place_id || row.origin?.name,\n    destination: row.destination?.place_id || row.destination?.name,\n    seconds: duration\n  });\n}\nreturn [{json: {trafficEdges: edges}}];"
+      },
+      "id": "CollectTraffic",
+      "name": "Function: Collect Traffic Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine"
+      },
+      "id": "MergeA",
+      "name": "Merge A (Agg + Occ)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        120,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine"
+      },
+      "id": "MergeB",
+      "name": "Merge B ( + Weather )",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine"
+      },
+      "id": "MergeC",
+      "name": "Merge C ( + Traffic )",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        520,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const norm = $node[\"Function: Validate & Normalize\"].json;\nconst placesAgg = $node[\"Function: Aggregate & Deduplicate Places\"].json.places || [];\nconst occ = $node[\"Function: Tag internal occ\"].json || {};\nconst weather = $node[\"HTTP: Weather (Open-Meteo)\"].json || {};\nconst traffic = $node[\"Function: Collect Traffic Results\"].json.trafficEdges || [];\n\n// index occupancy by place_id if available\nconst occIndex = new Map();\n(occ.results || []).forEach(o => occIndex.set(o.place_id, o));\n\nconst places = placesAgg.map(p => ({\n  ...p,\n  occupancy: (p.place_id && occIndex.get(p.place_id)?.values) ? occIndex.get(p.place_id).values : null\n}));\n\nreturn [{ json: { meta: {\n  date: norm.date,\n  tz: norm.tz,\n  transport: norm.transport,\n  people: norm.people,\n  wheelchair: norm.wheelchair,\n  lift: norm.lift,\n  preferences: norm.preferences\n}, places, weather, traffic } }];"
+      },
+      "id": "Consolidate",
+      "name": "Function: Consolidate Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        720,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const ctx = items[0].json;\nconst daily = ctx.weather?.daily || {};\nconst precip = (daily.precipitation_sum && daily.precipitation_sum[0]) || 0;\nconst precipProb = (daily.precipitation_probability_max && daily.precipitation_probability_max[0]) || 0;\n\nconst badWeather = (precip >= 10) || (precipProb >= 70);\n\nfunction isOpen(place, dateISO) {\n  const weekday = ['sun','mon','tue','wed','thu','fri','sat'][new Date(dateISO).getDay()];\n  const ranges = place.opening?.[weekday] || [];\n  return Array.isArray(ranges) ? ranges.length > 0 : !!ranges; // tolerate string\n}\n\nfunction accessibilityOK(place, wantWheelchair, wantLift) {\n  const a = place.access || {};\n  if (wantWheelchair && a.wheelchair === false) return false;\n  if (wantLift && a.lift === false) return false;\n  return true;\n}\n\nconst filtered = (ctx.places || []).filter(p => {\n  if (!accessibilityOK(p, ctx.meta.wheelchair, ctx.meta.lift)) return false;\n  if (!isOpen(p, ctx.meta.date)) return false;\n  if (badWeather && p.outdoor === true && p.indoor !== true) return false;\n  return true;\n});\n\nfunction score(p) {\n  let s = 0;\n  const prefs = ctx.meta.preferences || [];\n  const name = (p.name || '').toLowerCase();\n  if (prefs.some(pref => name.includes(pref))) s += 2;\n  const todayOcc = Array.isArray(p.occupancy) ? p.occupancy[0] : null;\n  if (todayOcc != null) s += (1 - Number(todayOcc)) * 1.5;\n  if (badWeather && p.indoor) s += 1;\n  return s;\n}\n\nconst ranked = filtered.map(p => ({...p, _score: score(p)}))\n  .sort((a,b) => b._score - a._score)\n  .slice(0, 24);\n\nreturn [{ json: { ...ctx, badWeather, candidates: ranked } }];"
+      },
+      "id": "WeatherAwareFilter",
+      "name": "Function: Weather-aware Filter & Rank",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        940,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "Authorization": "Bearer YOUR_OPENAI_API_KEY",
+            "Content-Type": "application/json"
+          }
+        },
+        "sendBody": true,
+        "bodyParametersJson": "={{ {\n  model: 'gpt-4o-mini',\n  temperature: 0.7,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: `You are an expert Salzburg travel planner. Build practical, time-aware itineraries using:\\n- candidates: places with opening times, indoor/outdoor, accessibility, occupancy (0..1), and type.\\n- meta: date (Europe/Vienna), transport (public|private), people, wheelchair/lift requirements, preferences.\\n- trafficEdges: pairwise travel times (seconds).\\n- weather: use badWeather=true to bias indoor.\\nRules:\\n- Create TWO itineraries: one for 2 days and one for 3 days, starting on meta.date.\\n- Each day: 4–7 stops with realistic durations, respect opening hours, include buffer times for public transport.\\n- Lower occupancy is preferred at peak times; push crowded places to off-peak.\\n- If badWeather=true, prefer indoor, allow brief transitions only if safe.\\n- Ensure wheelchair/lift constraints are respected.\\n- Include coffee/meal stops that match preferences (e.g., “coffee”, “chinese food”, “high end shopping”).\\n- Minimize zig-zags using provided trafficEdges.\\n- Output strictly in the JSON schema:\\n{\\n  \\\"metaEcho\\\": { \\\"date\\\": \\\"YYYY-MM-DD\\\", \\\"transport\\\": \\\"...\\\", \\\"people\\\": n, \\\"badWeather\\\": bool },\\n  \\\"itineraries\\\": {\\n    \\\"2d\\\": [ { \\\"date\\\": \\\"YYYY-MM-DD\\\", \\\"stops\\\": [ { \\\"start\\\": \\\"HH:mm\\\", \\\"end\\\": \\\"HH:mm\\\", \\\"place_id\\\": \\\"...\\\", \\\"name\\\": \\\"...\\\", \\\"notes\\\": \\\"...\\\", \\\"indoor\\\": true|false|null, \\\"occupancyHint\\\": \\\"low|med|high|null\\\", \\\"wheelchairOK\\\": true|false|null } ] }, { } ],\\n    \\\"3d\\\": [ { }, { }, { } ]\\n  }\\n}`\n    },\n    {\n      role: 'user',\n      content: JSON.stringify({\n        meta: $json.meta,\n        badWeather: $json.badWeather,\n        candidates: $json.candidates,\n        trafficEdges: $json.traffic,\n        weather: $json.weather\n      })\n    }\n  ]\n} }}"
+      },
+      "id": "OpenAIChat",
+      "name": "HTTP: OpenAI Chat (JSON)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1160,
+        60
+      ],
+      "notesInFlow": true,
+      "notes": "Replace Authorization header with your OpenAI key or switch to the built-in OpenAI node if you prefer."
+    },
+    {
+      "parameters": {
+        "functionCode": "const r = items[0].json || {};\nconst content = r.choices?.[0]?.message?.content;\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { error: 'Model did not return valid JSON', raw: content };\n}\nreturn [{ json: parsed }];"
+      },
+      "id": "ParseOpenAI",
+      "name": "Function: Parse OpenAI JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "RespondWebhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        60
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook (entry)": {
+      "main": [
+        [
+          {
+            "node": "Function: Validate & Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function: Validate & Normalize": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Google Places (expand by prefs)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Weather (Open-Meteo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Google Places (expand by prefs)": {
+      "main": [
+        [
+          {
+            "node": "Function: Aggregate & Deduplicate Places",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function: Aggregate & Deduplicate Places": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Occupancy (internal attractions)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Function: Traffic Seeds",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge A (Agg + Occ)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Occupancy (internal attractions)": {
+      "main": [
+        [
+          {
+            "node": "Function: Tag internal occ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function: Tag internal occ": {
+      "main": [
+        [
+          {
+            "node": "Merge A (Agg + Occ)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP: Weather (Open-Meteo)": {
+      "main": [
+        [
+          {
+            "node": "Merge B ( + Weather )",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Function: Traffic Seeds": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Google Distance Matrix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Google Distance Matrix": {
+      "main": [
+        [
+          {
+            "node": "Function: Collect Traffic Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function: Collect Traffic Results": {
+      "main": [
+        [
+          {
+            "node": "Merge C ( + Traffic )",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge A (Agg + Occ)": {
+      "main": [
+        [
+          {
+            "node": "Merge B ( + Weather )",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge B ( + Weather )": {
+      "main": [
+        [
+          {
+            "node": "Merge C ( + Traffic )",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge C ( + Traffic )": {
+      "main": [
+        [
+          {
+            "node": "Function: Consolidate Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function: Consolidate Context": {
+      "main": [
+        [
+          {
+            "node": "Function: Weather-aware Filter & Rank",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function: Weather-aware Filter & Rank": {
+      "main": [
+        [
+          {
+            "node": "HTTP: OpenAI Chat (JSON)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: OpenAI Chat (JSON)": {
+      "main": [
+        [
+          {
+            "node": "Function: Parse OpenAI JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function: Parse OpenAI JSON": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "timezone": "Europe/Vienna"
+  },
+  "staticData": null,
+  "meta": {
+    "instanceId": "salzburg-travel-planner"
+  }
+}

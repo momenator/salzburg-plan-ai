@@ -14,6 +14,8 @@ const Plan = () => {
   const [selectedPlaces, setSelectedPlaces] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
+  const [numberOfDays, setNumberOfDays] = useState(2);
+  const [startDate, setStartDate] = useState("");
 
   const filteredPlaces = places.filter((place) =>
     place.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -41,36 +43,39 @@ const Plan = () => {
 
       <div className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="date-from">Travel Dates</Label>
-          <Input id="date-from" type="date" placeholder="From" />
-          <Input id="date-to" type="date" placeholder="To" />
+          <Label htmlFor="start-date">Starting Date</Label>
+          <Input
+            id="start-date"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="accommodation">Starting Point / Accommodation (Optional)</Label>
-          <Input id="accommodation" placeholder="Your hotel or address" />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="group-size">Group Size (Optional)</Label>
-          <Input id="group-size" type="number" placeholder="Number of people" />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Accessibility Requirements</Label>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <Checkbox id="wheelchair" />
-              <label htmlFor="wheelchair" className="text-sm">
-                Wheelchair accessible
-              </label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="elevator" />
-              <label htmlFor="elevator" className="text-sm">
-                Elevator access required
-              </label>
-            </div>
+        <div className="space-y-3">
+          <Label>Number of Days</Label>
+          <div className="flex gap-3">
+            <Button
+              variant={numberOfDays === 1 ? "default" : "outline"}
+              className="flex-1"
+              onClick={() => setNumberOfDays(1)}
+            >
+              1 Day
+            </Button>
+            <Button
+              variant={numberOfDays === 2 ? "default" : "outline"}
+              className="flex-1"
+              onClick={() => setNumberOfDays(2)}
+            >
+              2 Days
+            </Button>
+            <Button
+              variant={numberOfDays === 3 ? "default" : "outline"}
+              className="flex-1"
+              onClick={() => setNumberOfDays(3)}
+            >
+              3 Days
+            </Button>
           </div>
         </div>
 
@@ -99,13 +104,31 @@ const Plan = () => {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="search">Select Places to Visit</Label>
-          <Input
-            id="search"
-            placeholder="Search places..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+          <Label htmlFor="accommodation">Starting Point / Accommodation (Optional)</Label>
+          <Input id="accommodation" placeholder="Your hotel or address" />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="group-size">Group Size (Optional)</Label>
+          <Input id="group-size" type="number" placeholder="Number of people" />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Accessibility Requirements (Optional)</Label>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox id="wheelchair" />
+              <label htmlFor="wheelchair" className="text-sm">
+                Wheelchair accessible
+              </label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox id="elevator" />
+              <label htmlFor="elevator" className="text-sm">
+                Elevator access required
+              </label>
+            </div>
+          </div>
         </div>
 
         <Tabs defaultValue="list" className="w-full" onValueChange={(v) => setViewMode(v as "list" | "map")}>
@@ -113,8 +136,18 @@ const Plan = () => {
             <TabsTrigger value="list">List View</TabsTrigger>
             <TabsTrigger value="map">Map View</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="list" className="space-y-2 mt-4">
+            <div className="space-y-2 mb-4">
+              <Label htmlFor="search">Select Places to Visit</Label>
+              <Input
+                id="search"
+                placeholder="Search places..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
             {filteredPlaces.map((place) => (
               <div
                 key={place.id}
@@ -149,11 +182,13 @@ const Plan = () => {
           <TabsContent value="map" className="mt-4">
             <div className="h-[400px] mb-4">
               <MapView
-                markers={places.map(place => ({
-                  id: place.id,
-                  position: { lat: 47.8095 + Math.random() * 0.02, lng: 13.0550 + Math.random() * 0.02 },
-                  title: place.name
-                }))}
+                markers={places
+                  .filter(place => selectedPlaces.includes(place.id))
+                  .map(place => ({
+                    id: place.id,
+                    position: { lat: place.lat, lng: place.lng },
+                    title: place.name
+                  }))}
                 interactive={true}
               />
             </div>
@@ -182,7 +217,7 @@ const Plan = () => {
         </Tabs>
 
         <Button className="w-full" size="lg" asChild>
-          <Link to="/plan/list">
+          <Link to="/plan/list" state={{ selectedPlaces, selectedPlaceNames: places.filter(p => selectedPlaces.includes(p.id)).map(p => p.name) }}>
             View Selected Places ({selectedPlaces.length})
           </Link>
         </Button>

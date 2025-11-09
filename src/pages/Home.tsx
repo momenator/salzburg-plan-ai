@@ -4,7 +4,7 @@ import { places } from "@/data/places";
 const Home = () => {
   return (
     <div className="pb-20 pt-6 px-4">
-      <h1 className="text-3xl font-bold mb-6">Most Popular</h1>
+      <h1 className="text-3xl font-bold mb-6">Based on Your Preferences</h1>
       
       <div className="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide">
         {places.map((place) => (
