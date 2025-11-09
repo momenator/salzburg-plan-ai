@@ -47,16 +47,26 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        sidebar: {
-          DEFAULT: "hsl(var(--sidebar-background))",
-          foreground: "hsl(var(--sidebar-foreground))",
-          primary: "hsl(var(--sidebar-primary))",
-          "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
-          accent: "hsl(var(--sidebar-accent))",
-          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
-          border: "hsl(var(--sidebar-border))",
-          ring: "hsl(var(--sidebar-ring))",
+        navbar: {
+          DEFAULT: "hsl(var(--nav-bar))",
+          foreground: "hsl(var(--nav-bar-foreground))",
+          active: "hsl(var(--nav-bar-active))",
         },
+        price: "hsl(var(--price-text))",
+        savings: "hsl(var(--savings-bg))",
+      },
+      fontFamily: {
+        sans: ['"Roboto Condensed"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
+      fontSize: {
+        base: ['17px', '1.5'],
+        lg: ['19px', '1.5'],
+        xl: ['21px', '1.4'],
+        '2xl': ['24px', '1.3'],
+        '3xl': ['28px', '1.2'],
+      },
+      maxWidth: {
+        mobile: '480px',
       },
       borderRadius: {
         lg: "var(--radius)",
